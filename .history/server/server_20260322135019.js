@@ -31,21 +31,13 @@ io.on('connection', (socket) => {
     io.to(data.projectId).emit('refreshTasks', data);
   });
 
+  // 🔔 ADD THIS NEW PART
   socket.on('newTask', (data) => {
     io.to(data.projectId).emit('notification', {
       message: `New task added: ${data.taskTitle}`,
       projectId: data.projectId
     });
   });
-
-  // ── NEW: handle taskAssigned event ──
-  socket.on('taskAssigned', (data) => {
-    io.to(data.projectId).emit('notification', {
-      message: `Task "${data.taskTitle}" has been assigned to a team member 🎯`,
-      projectId: data.projectId
-    });
-  });
-  // ────────────────────────────────────
 
   socket.on('disconnect', () => {
     console.log('User disconnected');

@@ -25,24 +25,6 @@ export default function Board() {
   const [showMemberModal, setShowMemberModal] = useState(false);
   const [memberEmail, setMemberEmail] = useState('');
   const [memberMsg, setMemberMsg] = useState('');
-  const [notifications, setNotifications] = useState([]);
-
-  // ── NEW ──
-  const [reassigning, setReassigning] = useState(false);
-  const [reassignMsg, setReassignMsg] = useState('');
-  // ─────────
-
-  const addNotification = (message) => {
-    const id = Date.now();
-    setNotifications(prev => [...prev, { id, message }]);
-    setTimeout(() => {
-      setNotifications(prev => prev.filter(n => n.id !== id));
-    }, 4000);
-  };
-
-  const removeNotification = (id) => {
-    setNotifications(prev => prev.filter(n => n.id !== id));
-  };
 
   const fetchTasks = async () => {
     try {
@@ -75,13 +57,7 @@ export default function Board() {
     fetchProject();
     socket.emit('joinProject', projectId);
     socket.on('refreshTasks', () => fetchTasks());
-    socket.on('notification', (data) => {
-      addNotification(data.message);
-    });
-    return () => {
-      socket.off('refreshTasks');
-      socket.off('notification');
-    };
+    return () => socket.off('refreshTasks');
   }, [projectId]);
 
   const handleCreateTask = async (e) => {
@@ -154,33 +130,6 @@ export default function Board() {
     }
   };
 
-  // ── NEW: reassign handler ──
-  const handleReassign = async (newAssigneeId) => {
-    setReassigning(true);
-    setReassignMsg('');
-    try {
-      await axios.put(
-        `http://localhost:5000/api/tasks/${selectedTask._id}`,
-        { assignedTo: newAssigneeId },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      setReassignMsg('✅ Reassigned successfully!');
-      await fetchTasks();
-      // update selectedTask to reflect new assignee
-      setSelectedTask(prev => ({
-        ...prev,
-        assignedTo: project.members.find(m => m._id === newAssigneeId) || null
-      }));
-      socket.emit('taskUpdated', { projectId });
-      setTimeout(() => setReassignMsg(''), 3000);
-    } catch (err) {
-      setReassignMsg('❌ Failed to reassign');
-    } finally {
-      setReassigning(false);
-    }
-  };
-  // ──────────────────────────
-
   const getTasksByStatus = (status) => tasks.filter(task => task.status === status);
 
   const columnColors = {
@@ -204,32 +153,6 @@ export default function Board() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-indigo-50">
       <Navbar projectId={projectId} />
-
-      {/* Toast Notification Stack */}
-      <div className="fixed top-5 right-5 z-[100] flex flex-col gap-3 pointer-events-none">
-        {notifications.map((n) => (
-          <div
-            key={n.id}
-            className="pointer-events-auto flex items-start gap-3 bg-white border border-indigo-100 shadow-xl rounded-2xl px-4 py-3 min-w-[280px] max-w-[360px] animate-slideUp"
-          >
-            <div className="bg-indigo-100 p-1.5 rounded-lg flex-shrink-0">
-              <svg className="w-4 h-4 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
-              </svg>
-            </div>
-            <p className="text-gray-800 text-sm font-medium flex-1 leading-snug pt-0.5">{n.message}</p>
-            <button
-              onClick={() => removeNotification(n.id)}
-              className="text-gray-400 hover:text-gray-600 transition-colors flex-shrink-0 mt-0.5"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          </div>
-        ))}
-      </div>
-
       <div className="max-w-7xl mx-auto p-6 lg:p-8">
 
         {/* Header */}
@@ -243,7 +166,7 @@ export default function Board() {
             </svg>
             Back to Dashboard
           </button>
-
+          
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
             <div>
               <h2 className="text-4xl font-bold bg-gradient-to-r from-slate-800 to-slate-600 bg-clip-text text-transparent">
@@ -254,8 +177,8 @@ export default function Board() {
               )}
               <div className="mt-3">
                 <span className={`inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-sm font-semibold ${
-                  isOwner
-                    ? 'bg-amber-100 text-amber-700 border border-amber-200'
+                  isOwner 
+                    ? 'bg-amber-100 text-amber-700 border border-amber-200' 
                     : 'bg-indigo-100 text-indigo-700 border border-indigo-200'
                 }`}>
                   {isOwner ? '👑 Project Owner' : '👤 Team Member'}
@@ -302,7 +225,7 @@ export default function Board() {
           </div>
         )}
 
-        {/* Kanban Board */}
+        {/* Kanban Board - Auto-height columns */}
         <DragDropContext onDragEnd={handleDragEnd}>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 lg:gap-8">
             {COLUMNS.map((col) => (
@@ -330,7 +253,10 @@ export default function Board() {
                       className={`p-4 space-y-3 transition-all duration-200 ${
                         snapshot.isDraggingOver ? 'bg-gradient-to-br from-gray-50 to-indigo-50' : ''
                       }`}
-                      style={{ minHeight: '300px', height: 'auto' }}
+                      style={{
+                        minHeight: '300px', // Normal base height
+                        height: 'auto', // Automatically expands when content is more
+                      }}
                     >
                       {getTasksByStatus(col).map((task, index) => (
                         <Draggable key={task._id} draggableId={task._id} index={index}>
@@ -339,13 +265,10 @@ export default function Board() {
                               ref={provided.innerRef}
                               {...provided.draggableProps}
                               {...provided.dragHandleProps}
-                              onClick={() => {
-                                setSelectedTask(task);
-                                setReassignMsg(''); // ── NEW: clear msg on open
-                              }}
+                              onClick={() => setSelectedTask(task)}
                               className={`group bg-white rounded-xl p-4 cursor-pointer transition-all duration-300 hover:shadow-xl hover:scale-[1.02] border border-gray-200 ${
-                                snapshot.isDragging
-                                  ? 'shadow-2xl rotate-1 border-indigo-300'
+                                snapshot.isDragging 
+                                  ? 'shadow-2xl rotate-1 border-indigo-300' 
                                   : 'hover:border-indigo-200'
                               }`}
                             >
@@ -355,13 +278,13 @@ export default function Board() {
                                 </h4>
                                 <div className="w-2 h-2 rounded-full bg-indigo-500 opacity-0 group-hover:opacity-100 transition-opacity"></div>
                               </div>
-
+                              
                               {task.description && (
                                 <p className="text-gray-500 text-sm mb-3 line-clamp-2 leading-relaxed">
                                   {task.description}
                                 </p>
                               )}
-
+                              
                               <div className="flex items-center justify-between mt-2">
                                 <div className="flex items-center gap-2">
                                   {task.assignedTo && (
@@ -375,7 +298,7 @@ export default function Board() {
                                     </div>
                                   )}
                                 </div>
-
+                                
                                 {task.comments?.length > 0 && (
                                   <div className="flex items-center gap-1 text-gray-400 text-xs">
                                     <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -399,7 +322,7 @@ export default function Board() {
         </DragDropContext>
       </div>
 
-      {/* Create Task Modal */}
+      {/* Create Task Modal - Professional Design */}
       {showTaskModal && isOwner && (
         <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fadeIn">
           <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl transform transition-all duration-300 animate-slideUp">
@@ -422,7 +345,7 @@ export default function Board() {
                   </svg>
                 </button>
               </div>
-
+              
               {error && (
                 <div className="mb-5 p-3 bg-red-50 border border-red-200 rounded-xl flex items-center gap-2">
                   <svg className="w-5 h-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -431,7 +354,7 @@ export default function Board() {
                   <p className="text-red-600 text-sm">{error}</p>
                 </div>
               )}
-
+              
               <form onSubmit={handleCreateTask} className="space-y-5">
                 <div>
                   <label className="block text-gray-700 text-sm font-semibold mb-2">Task Title *</label>
@@ -444,7 +367,7 @@ export default function Board() {
                     required
                   />
                 </div>
-
+                
                 <div>
                   <label className="block text-gray-700 text-sm font-semibold mb-2">Description</label>
                   <textarea
@@ -455,7 +378,7 @@ export default function Board() {
                     onChange={(e) => setForm({ ...form, description: e.target.value })}
                   />
                 </div>
-
+                
                 <div>
                   <label className="block text-gray-700 text-sm font-semibold mb-2">Assign To</label>
                   <select
@@ -471,7 +394,7 @@ export default function Board() {
                     ))}
                   </select>
                 </div>
-
+                
                 <div className="flex gap-3 pt-2">
                   <button
                     type="submit"
@@ -493,7 +416,7 @@ export default function Board() {
         </div>
       )}
 
-      {/* Task Detail Modal */}
+      {/* Task Detail Modal - Enhanced */}
       {selectedTask && (
         <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fadeIn">
           <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl max-h-[90vh] overflow-y-auto">
@@ -516,14 +439,14 @@ export default function Board() {
                   </svg>
                 </button>
               </div>
-
+              
               {selectedTask.description && (
                 <div className="mb-5 p-4 bg-gray-50 rounded-xl">
                   <p className="text-gray-700 leading-relaxed">{selectedTask.description}</p>
                 </div>
               )}
-
-              <div className="flex flex-wrap gap-2 mb-4">
+              
+              <div className="flex flex-wrap gap-2 mb-6">
                 <span className={`px-3 py-1.5 rounded-lg text-sm font-semibold ${
                   selectedTask.status === 'Done' ? 'bg-emerald-100 text-emerald-700' :
                   selectedTask.status === 'In Progress' ? 'bg-amber-100 text-amber-700' :
@@ -540,48 +463,7 @@ export default function Board() {
                   </span>
                 )}
               </div>
-
-              {/* ── NEW: Reassign section — owner only ── */}
-              {isOwner && (
-                <div className="mb-6 p-4 bg-gray-50 border border-gray-100 rounded-xl">
-                  <label className="block text-gray-700 text-sm font-semibold mb-2 flex items-center gap-2">
-                    <svg className="w-4 h-4 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                    </svg>
-                    Reassign Task
-                  </label>
-                  <div className="flex gap-2">
-                    <select
-                      className="flex-1 p-2.5 rounded-xl bg-white text-gray-800 border border-gray-200 focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 transition-all text-sm"
-                      defaultValue={selectedTask.assignedTo?._id || ''}
-                      onChange={(e) => handleReassign(e.target.value)}
-                      disabled={reassigning}
-                    >
-                      <option value="">Unassigned</option>
-                      {project?.members?.map((member) => (
-                        <option key={member._id} value={member._id}>
-                          {member.name} ({member.email})
-                        </option>
-                      ))}
-                    </select>
-                    {reassigning && (
-                      <div className="flex items-center px-3">
-                        <svg className="animate-spin h-4 w-4 text-indigo-600" fill="none" viewBox="0 0 24 24">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
-                        </svg>
-                      </div>
-                    )}
-                  </div>
-                  {reassignMsg && (
-                    <p className={`text-xs mt-2 font-medium ${reassignMsg.includes('✅') ? 'text-emerald-600' : 'text-red-500'}`}>
-                      {reassignMsg}
-                    </p>
-                  )}
-                </div>
-              )}
-              {/* ────────────────────────────────────── */}
-
+              
               <CommentSection
                 task={selectedTask}
                 onUpdate={() => {
@@ -595,7 +477,7 @@ export default function Board() {
         </div>
       )}
 
-      {/* Add Member Modal */}
+      {/* Add Member Modal - Enhanced Professional */}
       {showMemberModal && isOwner && (
         <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fadeIn">
           <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl transform transition-all duration-300 animate-slideUp max-h-[90vh] overflow-y-auto">
@@ -618,7 +500,7 @@ export default function Board() {
                   </svg>
                 </button>
               </div>
-
+              
               {memberMsg && (
                 <div className={`mb-5 p-3 rounded-xl flex items-center gap-2 ${
                   memberMsg.includes('✅') ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'
@@ -631,7 +513,7 @@ export default function Board() {
                   </p>
                 </div>
               )}
-
+              
               <form onSubmit={handleAddMember} className="space-y-5">
                 <div>
                   <label className="block text-gray-700 text-sm font-semibold mb-2">Member's Email</label>
@@ -644,7 +526,7 @@ export default function Board() {
                     required
                   />
                 </div>
-
+                
                 <div className="flex gap-3 pt-2">
                   <button
                     type="submit"
@@ -661,7 +543,7 @@ export default function Board() {
                   </button>
                 </div>
               </form>
-
+              
               <div className="mt-6 pt-6 border-t border-gray-200">
                 <h4 className="text-gray-800 font-semibold mb-3 flex items-center gap-2">
                   <svg className="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -673,8 +555,8 @@ export default function Board() {
                   {project?.members?.map((member) => (
                     <div key={member._id} className="bg-gray-50 p-3 rounded-xl flex items-center gap-3 hover:bg-gray-100 transition-all duration-200">
                       <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm ${
-                        project.owner?._id === member._id
-                          ? 'bg-amber-100 text-amber-700'
+                        project.owner?._id === member._id 
+                          ? 'bg-amber-100 text-amber-700' 
                           : 'bg-indigo-100 text-indigo-700'
                       }`}>
                         {member.name.charAt(0).toUpperCase()}
@@ -700,18 +582,33 @@ export default function Board() {
           from { opacity: 0; }
           to { opacity: 1; }
         }
+        
         @keyframes slideUp {
-          from { opacity: 0; transform: translateY(20px); }
-          to { opacity: 1; transform: translateY(0); }
+          from {
+            opacity: 0;
+            transform: translateY(20px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
         }
-        .animate-fadeIn { animation: fadeIn 0.2s ease-out; }
-        .animate-slideUp { animation: slideUp 0.3s ease-out; }
+        
+        .animate-fadeIn {
+          animation: fadeIn 0.2s ease-out;
+        }
+        
+        .animate-slideUp {
+          animation: slideUp 0.3s ease-out;
+        }
+        
         .line-clamp-1 {
           display: -webkit-box;
           -webkit-line-clamp: 1;
           -webkit-box-orient: vertical;
           overflow: hidden;
         }
+        
         .line-clamp-2 {
           display: -webkit-box;
           -webkit-line-clamp: 2;

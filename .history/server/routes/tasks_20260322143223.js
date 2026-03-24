@@ -36,20 +36,14 @@ router.get('/:projectId', auth, async (req, res) => {
   }
 });
 
-// Update Task Status + Assignee - Any member can drag, Owner can reassign
+// Update Task Status - Any member can drag
 router.put('/:id', auth, async (req, res) => {
   try {
-    // ── NEW: build update object dynamically ──
-    const updateFields = {};
-    if (req.body.status !== undefined) updateFields.status = req.body.status;
-    if (req.body.assignedTo !== undefined) updateFields.assignedTo = req.body.assignedTo || null;
-    // ─────────────────────────────────────────
-
     const task = await Task.findByIdAndUpdate(
       req.params.id,
-      updateFields,       // ── NEW: was hardcoded { status: req.body.status }
+      { status: req.body.status },
       { new: true }
-    ).populate('assignedTo', 'name email'); // ── NEW: populate so frontend gets name back
+    );
     res.json(task);
   } catch (err) {
     res.status(500).json({ msg: 'Server error' });
