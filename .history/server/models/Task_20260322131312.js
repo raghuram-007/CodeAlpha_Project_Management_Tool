@@ -10,14 +10,6 @@ const TaskSchema = new mongoose.Schema({
   },
   project: { type: mongoose.Schema.Types.ObjectId, ref: 'Project' },
   assignedTo: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-  // ── NEW ──
-  priority: {
-    type: String,
-    enum: ['Low', 'Medium', 'High'],
-    default: 'Medium'
-  },
-  dueDate: { type: Date, default: null },
-  // ─────────
   comments: [{
     user: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     text: { type: String },
